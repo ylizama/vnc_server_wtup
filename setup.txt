@@ -1,0 +1,91 @@
+Original source: https://www.digitalocean.com/community/tutorials/how-to-install-and-configure-vnc-on-ubuntu-18-04
+
+
+Step 1 — Installing the Desktop Environment and VNC Server
+sudo apt update
+sudo apt install xfce4 xfce4-goodies
+sudo apt install tightvncserver
+vncserver
+
+* You’ll be prompted to enter and verify a password to access your machine remotely:
+* Output
+* You will require a password to access your desktops.
+
+* Password:
+* Verify:
+
+* Creating default startup script /home/sammy/.vnc/xstartup
+* Starting applications specified in /home/sammy/.vnc/xstartup
+* Log file is /home/sammy/.vnc/your_hostname:1.log
+
+Step 2 — Configuring the VNC Server
+
+vncserver -kill :1
+mv ~/.vnc/xstartup ~/.vnc/xstartup.bak
+nano ~/.vnc/xstartup
+Commands in this file are executed automatically whenever you start or restart the VNC server. We need VNC to start our desktop environment if it’s not already started. Add these commands to the file:
+
+~/.vnc/xstartup
+#!/bin/bash
+xrdb $HOME/.Xresources
+startxfce4 &
+
+
+sudo chmod +x ~/.vnc/xstartup
+vncserver
+
+* Starting applications specified in /home/sammy/.vnc/xstartup
+* Log file is /home/sammy/.vnc/your_hostname:1.log
+
+Step 3 — Connecting the VNC Desktop Securely
+ssh -L 5901:127.0.0.1:5901 -C -N -l sammy your_server_ip
+
+Step 4 — Running VNC as a System Service
+
+sudo nano /etc/systemd/system/vncserver@.service
+
+* Content
+[Unit]
+Description=Start TightVNC server at startup
+After=syslog.target network.target
+
+[Service]
+Type=forking
+User=sammy
+Group=sammy
+WorkingDirectory=/home/sammy
+
+PIDFile=/home/sammy/.vnc/%H:%i.pid
+ExecStartPre=-/usr/bin/vncserver -kill :%i > /dev/null 2>&1
+ExecStart=/usr/bin/vncserver -depth 24 -geometry 1280x800 :%i
+ExecStop=/usr/bin/vncserver -kill :%i
+
+[Install]
+WantedBy=multi-user.target
+The ExecStartPre command stops VNC if it’s already running. The ExecStart command starts VNC and sets the color depth to 24-bit color with a resolution of 1280x800. You can modify these startup options as well to meet your needs.
+
+Save and close the file.
+
+Next, make the system aware of the new unit file.
+sudo systemctl daemon-reload
+sudo systemctl enable vncserver@1.service
+vncserver -kill :1
+sudo systemctl start vncserver@1
+sudo systemctl status vncserver@1
+
+If it started correctly, the output should look like this:
+
+Output
+● vncserver@1.service - Start TightVNC server at startup
+   Loaded: loaded (/etc/systemd/system/vncserver@.service; indirect; vendor preset: enabled)
+   Active: active (running) since Mon 2018-07-09 18:13:53 UTC; 2min 14s ago
+  Process: 22322 ExecStart=/usr/bin/vncserver -depth 24 -geometry 1280x800 :1 (code=exited, status=0/SUCCESS)
+  Process: 22316 ExecStartPre=/usr/bin/vncserver -kill :1 > /dev/null 2>&1 (code=exited, status=0/SUCCESS)
+ Main PID: 22330 (Xtightvnc)
+
+...
+Your VNC server will now be available when you reboot the machine.
+
+Start your SSH tunnel again:
+
+ssh -L 5901:127.0.0.1:5901 -C -N -l sammy your_server_ip
